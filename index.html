@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Process Analysis Exam</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; }
+  .hidden { display: none; }
+  .question { margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+  label { display: block; margin-top: 5px; }
+  #timer { font-size: 18px; font-weight: bold; color: red; }
+  .correct { color: green; font-weight: bold; }
+  .incorrect { color: red; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Process Analysis Exam</h1>
+<p id="timer">Time left: —</p>
+
+<form id="examForm" class="hidden">
+  <label>Student Name: <input type="text" id="studentName" name="studentName" required></label>
+  <div id="questionsContainer"></div>
+  <button type="submit">Submit Exam</button>
+</form>
+
+<div id="result" class="hidden">
+  <h2>Exam Submitted</h2>
+  <p><strong>Name:</strong> <span id="resName"></span></p>
+  <p><strong>Time Remaining:</strong> <span id="resTime"></span></p>
+  <p><strong>Total Score:</strong> <span id="totalScore"></span> / 20</p>
+  <div id="feedbackContainer"></div>
+  <pre id="savedAnswers"></pre>
+</div>
+
+<div id="instructorView" class="hidden">
+  <h2>Instructor: All Exam Scores</h2>
+  <table border="1" cellpadding="5" cellspacing="0">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Student Name</th>
+        <th>Score</th>
+        <th>Submitted At</th>
+      </tr>
+    </thead>
+    <tbody id="instructorTableBody"></tbody>
+  </table>
+  <button id="closeInstructorView">Close</button>
+</div>
+
+
+<script>
+// ================= START CONFIRMATION =================
+if(!confirm("Do you want to start the exam? You have 30 minutes.")){
+    alert("Exam not started.");
+} else {
+    document.getElementById("examForm").classList.remove("hidden");
+}
+
+// ================= TIMER =================
+const duration = 30 * 60 * 1000; // 30 minutes
+let endTime = localStorage.getItem("endTime");
+if (!endTime) {
+  endTime = Date.now() + duration;
+  localStorage.setItem("endTime", endTime);
+}
+endTime = parseInt(endTime);
+
+function fmt(ms){
+  let s = Math.max(0, Math.floor(ms/1000));
+  let m = Math.floor(s/60); s%=60;
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function updateTimer(){
+  let remain = endTime - Date.now();
+  if (remain <= 0){ 
+    clearInterval(timerInt);
+    autoSubmit("Time up");
+  }
+  document.getElementById("timer").textContent = "Time left: " + fmt(remain);
+}
+let timerInt = setInterval(updateTimer, 1000);
+updateTimer();
+
+// ================= QUESTIONS =================
+const questions = [
+  {type:"mc",q:"What is process analysis?",opts:["A. A way of coding","B. The examination of a process to identify areas for improvement","C. A marketing strategy","D. A way to hire employees"],ans:"B"},
+  {type:"mc",q:"Qualitative analysis uses ______.",opts:["A. Numerical data","B. Descriptive observations","C. Equations","D. Percentages"],ans:"B"},
+  {type:"mc",q:"Quantitative analysis uses ______.",opts:["A. Narratives","B. Descriptive notes","C. Numerical data","D. Opinions"],ans:"C"},
+  {type:"id",q:"Name one tool used in process analysis for identifying root causes.",ans:"Root Cause Analysis"},
+  {type:"id",q:"What diagram visually organizes potential causes of problems?",ans:"Fishbone Diagram"},
+  {type:"mc",q:"A bottleneck is ______.",opts:["A. A tool for measuring quality","B. A point in a process that slows it down","C. A cost-saving strategy","D. An input resource"],ans:"B"},
+  {type:"id",q:"Define inefficiency in a process.",ans:"Areas where resources are wasted"},
+  {type:"mc",q:"What is the main focus of Phase 3 – Process Analysis?",opts:["A. Designing new processes","B. Identifying problems in the current process","C. Marketing products","D. Hiring staff"],ans:"B"},
+  {type:"id",q:"What is one outcome of effective process analysis?",ans:"Improved efficiency"},
+  {type:"id",q:"Give one real-life example where process analysis can be applied.",ans:"Case Study"},
+  {type:"mc",q:"Which outcome of process analysis directly impacts customer satisfaction?",opts:["A. Waste increase","B. Poor quality","C. Better quality","D. None"],ans:"C"},
+  {type:"id",q:"What happens when bottlenecks are removed?",ans:"Processes are streamlined"},
+  {type:"id",q:"Process analysis is crucial for what?",ans:"Continuous improvement"},
+  {type:"mc",q:"Which of the following is NOT part of process analysis?",opts:["A. Identifying inputs and outputs","B. Eliminating waste","C. Hiring employees","D. Improving efficiency"],ans:"C"},
+  {type:"mc",q:"Which analysis type measures and evaluates process performance?",opts:["A. Qualitative","B. Quantitative","C. Descriptive","D. Subjective"],ans:"B"},
+  {type:"id",q:"Fishbone diagram is also known as ______ diagram.",ans:"Cause and Effect"},
+  {type:"mc",q:"Which analysis method uses descriptive observations?",opts:["A. Qualitative","B. Quantitative","C. Statistical","D. Numerical"],ans:"A"},
+  {type:"id",q:"List one benefit of effective process analysis aside from efficiency.",ans:"Reduced costs"},
+  {type:"mc",q:"What do you call the points where resources are wasted?",opts:["A. Bottlenecks","B. Inefficiencies","C. Strategies","D. Tools"],ans:"B"},
+  {type:"id",q:"What is the ultimate goal of process analysis?",ans:"Optimizing processes"}
+];
+
+let currentOrder = [...Array(questions.length).keys()];
+
+// ================= RENDER =================
+const container = document.getElementById("questionsContainer");
+
+function renderQuestions(){
+  const saved = {};
+  questions.forEach((q,i)=>{
+    const el = document.querySelector(`[name=q${i}]`);
+    if (el){
+      if (q.type==="mc"){
+        saved[i] = document.querySelector(`[name=q${i}]:checked`)?.value || "";
+      } else {
+        saved[i] = el.value;
+      }
+    }
+  });
+  container.innerHTML="";
+  currentOrder.forEach((i,idx)=>{
+    const q = questions[i];
+    const div=document.createElement("div");
+    div.className="question";
+    const h=document.createElement("p");
+    h.textContent = (idx+1)+". "+q.q;
+    div.appendChild(h);
+    if(q.type==="mc"){
+      q.opts.forEach(opt=>{
+        const letter = opt.split(".")[0]; // store only A/B/C/D
+        const id=`q${i}_${letter}`;
+        const lbl=document.createElement("label");
+        lbl.innerHTML=`<input type="radio" name="q${i}" value="${letter}" id="${id}"> ${opt}`;
+        div.appendChild(lbl);
+      });
+    } else {
+      const inp=document.createElement("input");
+      inp.type="text"; inp.name="q"+i; inp.id="q"+i;
+      div.appendChild(inp);
+    }
+    container.appendChild(div);
+  });
+  // restore answers
+  Object.keys(saved).forEach(i=>{
+    const val=saved[i];
+    if (questions[i].type==="mc"){
+      if(val){
+        const el=document.querySelector(`[name=q${i}][value="${val}"]`);
+        if(el) el.checked=true;
+      }
+    } else {
+      const el=document.querySelector(`[name=q${i}]`);
+      if(el) el.value=val;
+    }
+  });
+}
+renderQuestions();
+
+// ================= AUTOSCORE & FEEDBACK =================
+const form=document.getElementById("examForm");
+const result=document.getElementById("result");
+const resName=document.getElementById("resName");
+const resTime=document.getElementById("resTime");
+const totalScoreEl=document.getElementById("totalScore");
+const savedAnswers=document.getElementById("savedAnswers");
+const feedbackContainer=document.getElementById("feedbackContainer");
+
+function autoSubmit(reason){
+  const data=new FormData(form);
+  const name=data.get("studentName")||"(no name)";
+  let score=0;
+  feedbackContainer.innerHTML = "<h3>Answer Feedback:</h3>";
+  questions.forEach((q,i)=>{
+    const ans = data.get("q"+i) || "";
+    let p = document.createElement("p");
+    if((q.type==="mc" && ans === q.ans) || (q.type==="id" && ans.trim().toLowerCase() === q.ans.trim().toLowerCase())){
+      score++;
+      p.innerHTML = `Q${i+1}: <span class="correct">Correct</span> ✅ (Your answer: ${ans})`;
+    } else {
+      p.innerHTML = `Q${i+1}: <span class="incorrect">Incorrect</span> ❌ (Your answer: ${ans || "No answer"}) | Correct answer: ${q.ans}`;
+    }
+    feedbackContainer.appendChild(p);
+  });
+  form.classList.add("hidden");
+  result.classList.remove("hidden");
+  resName.textContent=name;
+  resTime.textContent=fmt(endTime-Date.now());
+  totalScoreEl.textContent=score;
+
+  // save output
+  let out="== Process Analysis Exam ==\n";
+  out+="Student: "+name+"\n";
+  out+="Submitted at: "+new Date().toLocaleString()+"\n";
+  out+="Reason: "+reason+"\n\n";
+  questions.forEach((q,i)=>{
+    const ans = data.get("q"+i) || "";
+    out+="Q"+(i+1)+": "+ans+"\n";
+  });
+  out+="\nTotal Points: "+score+"/20\n";
+  savedAnswers.textContent=out;
+
+  localStorage.setItem("submitted", "true"); // block retake
+}
+form.addEventListener("submit", e=>{e.preventDefault(); autoSubmit("Submitted by user");});
+
+// ================= BLOCK RETAKE =================
+if(localStorage.getItem("submitted")){
+    alert("You have already submitted. You cannot retake the exam.");
+    form.classList.add("hidden");
+}
+
+// ================= INSTRUCTOR RESET =================
+const instructorPassword = "Instructor123";
+function promptInstructorReset() {
+    const pass = prompt("Instructor: Enter password to reset exam:");
+    if (pass === instructorPassword) {
+        if (confirm("Reset exam? All current answers will be lost.")) {
+            localStorage.removeItem("endTime");
+            localStorage.removeItem("submitted");
+            location.reload();
+        }
+    } else {
+        alert("Incorrect password. Exam not reset.");
+    }
+}
+document.addEventListener("keydown", e => {
+    if (e.ctrlKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        promptInstructorReset();
+    }
+});
+
+// ================= BLOCK RELOAD & CHEAT =================
+window.addEventListener('beforeunload', e => { e.preventDefault(); e.returnValue = ''; });
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden) alert('Tab switch is disabled!'); });
+document.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('keydown', function(e){
+  if (e.ctrlKey || e.metaKey) {
+    const banned=['c','v','x','s','u','p'];
+    if (banned.includes(e.key.toLowerCase())) e.preventDefault();
+  }
+  if (e.key==='F12'){ e.preventDefault(); }
+});
+questions.forEach((q,i)=>{
+  const id="q"+i;
+  setTimeout(()=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    ['paste','copy','cut','contextmenu'].forEach(ev => el.addEventListener(ev, e => e.preventDefault()));
+  },500);
+});
+document.querySelectorAll('label, h1, h3, p').forEach(el => { el.style.userSelect = 'none'; });
+
+</script>
+</body>
+</html>
